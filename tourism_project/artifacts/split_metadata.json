@@ -1,0 +1,33 @@
+{
+  "target": "ProdTaken",
+  "random_state": 42,
+  "dropped_columns": [
+    "Unnamed: 0",
+    "CustomerID"
+  ],
+  "train_records": 3208,
+  "test_records": 803,
+  "train_positive_prevalence": 0.193,
+  "test_positive_prevalence": 0.193,
+  "feature_count": 18,
+  "feature_names": [
+    "Age",
+    "TypeofContact",
+    "CityTier",
+    "DurationOfPitch",
+    "Occupation",
+    "Gender",
+    "NumberOfPersonVisiting",
+    "NumberOfFollowups",
+    "ProductPitched",
+    "PreferredPropertyStar",
+    "MaritalStatus",
+    "NumberOfTrips",
+    "Passport",
+    "PitchSatisfactionScore",
+    "OwnCar",
+    "NumberOfChildrenVisiting",
+    "Designation",
+    "MonthlyIncome"
+  ]
+}
