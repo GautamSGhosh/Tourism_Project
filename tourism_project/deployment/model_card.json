@@ -1,0 +1,61 @@
+{
+  "model_type": "RandomForestClassifier",
+  "target": "ProdTaken",
+  "data_split": "80/20 stratified, random_state=42",
+  "best_parameters": {
+    "model__max_depth": null,
+    "model__max_features": "sqrt",
+    "model__min_samples_leaf": 1,
+    "model__n_estimators": 150
+  },
+  "metrics": {
+    "test_roc_auc": 0.9681,
+    "test_pr_auc": 0.8999,
+    "test_precision": 0.8477,
+    "test_recall": 0.8258,
+    "test_f1": 0.8366,
+    "test_specificity": 0.9645,
+    "operating_threshold": 0.32,
+    "oof_f1_at_threshold": 0.7675,
+    "test_contacts_flagged": 151,
+    "test_true_positives": 128
+  },
+  "confusion_matrix": {
+    "tn": 625,
+    "fp": 23,
+    "fn": 27,
+    "tp": 128
+  },
+  "classification_report": {
+    "0": {
+      "precision": 0.9585889570552147,
+      "recall": 0.9645061728395061,
+      "f1-score": 0.9615384615384616,
+      "support": 648.0
+    },
+    "1": {
+      "precision": 0.847682119205298,
+      "recall": 0.8258064516129032,
+      "f1-score": 0.8366013071895425,
+      "support": 155.0
+    },
+    "accuracy": 0.937733499377335,
+    "macro avg": {
+      "precision": 0.9031355381302564,
+      "recall": 0.8951563122262047,
+      "f1-score": 0.899069884364002,
+      "support": 803.0
+    },
+    "weighted avg": {
+      "precision": 0.9371810369222918,
+      "recall": 0.937733499377335,
+      "f1-score": 0.9374223234013725,
+      "support": 803.0
+    }
+  },
+  "limitations": [
+    "Model reflects historical campaign patterns; retrain quarterly.",
+    "Designed as decision support to prioritize sales outreach, not autonomous exclusion.",
+    "Review demographic fairness metrics across city tiers and gender."
+  ]
+}
