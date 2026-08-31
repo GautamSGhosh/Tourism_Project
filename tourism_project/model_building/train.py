@@ -36,12 +36,12 @@ def select_threshold(y_true: pd.Series, probabilities: np.ndarray) -> tuple[floa
 def main() -> None:
     DEPLOY_DIR.mkdir(parents=True, exist_ok=True)
     ARTIFACT_DIR.mkdir(parents=True, exist_ok=True)
-    
+
     train = pd.read_csv(ARTIFACT_DIR / "train.csv")
     test = pd.read_csv(ARTIFACT_DIR / "test.csv")
     X_train, y_train = train.drop(columns=TARGET), train[TARGET].astype(int)
     X_test, y_test = test.drop(columns=TARGET), test[TARGET].astype(int)
-    
+
     numeric_features = X_train.select_dtypes(include="number").columns.tolist()
     categorical_features = X_train.select_dtypes(exclude="number").columns.tolist()
 
@@ -55,21 +55,21 @@ def main() -> None:
         ],
         remainder="drop",
     )
-    
+
     pipeline = Pipeline([
         ("preprocessor", preprocessor),
         ("model", RandomForestClassifier(
             class_weight="balanced", random_state=RANDOM_STATE, n_jobs=-1
         )),
     ])
-    
+
     parameter_grid = {
         "model__n_estimators": [150],
         "model__max_depth": [None, 12],
         "model__min_samples_leaf": [1, 3],
         "model__max_features": ["sqrt"],
     }
-    
+
     cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)
     search = GridSearchCV(
         pipeline, parameter_grid, scoring="average_precision", cv=cv,
@@ -78,20 +78,20 @@ def main() -> None:
 
     mlflow.set_tracking_uri((ROOT / "mlruns").resolve().as_uri())
     mlflow.set_experiment("tourism_package_prediction")
-    
+
     with mlflow.start_run(run_name="production_random_forest_pipeline"):
         search.fit(X_train, y_train)
         best_model = search.best_estimator_
-        
+
         oof_probabilities = cross_val_predict(
             best_model, X_train, y_train, cv=cv, method="predict_proba", n_jobs=-1
         )[:, 1]
         threshold, oof_f1 = select_threshold(y_train, oof_probabilities)
-        
+
         probabilities = best_model.predict_proba(X_test)[:, 1]
         predictions = (probabilities >= threshold).astype(int)
         tn, fp, fn, tp = confusion_matrix(y_test, predictions).ravel()
-        
+
         metrics = {
             "test_roc_auc": round(float(roc_auc_score(y_test, probabilities)), 4),
             "test_pr_auc": round(float(average_precision_score(y_test, probabilities)), 4),
@@ -104,7 +104,7 @@ def main() -> None:
             "test_contacts_flagged": int(predictions.sum()),
             "test_true_positives": int(tp),
         }
-        
+
         mlflow.log_params(search.best_params_)
         mlflow.log_metrics(metrics)
 
@@ -138,7 +138,7 @@ def main() -> None:
         }
         model_path = DEPLOY_DIR / "best_model.joblib"
         joblib.dump(bundle, model_path)
-        
+
         report = classification_report(y_test, predictions, output_dict=True, zero_division=0)
         model_card = {
             "model_type": "RandomForestClassifier",
@@ -156,7 +156,7 @@ def main() -> None:
         }
         card_path = DEPLOY_DIR / "model_card.json"
         card_path.write_text(json.dumps(model_card, indent=2, default=float), encoding="utf-8")
-        
+
         mlflow.log_artifact(str(figure_path), artifact_path="evaluation")
         mlflow.log_artifact(str(importance_path), artifact_path="interpretability")
         mlflow.log_artifact(str(card_path), artifact_path="model_card")
