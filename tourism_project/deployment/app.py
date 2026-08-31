@@ -21,7 +21,7 @@ bundle = load_model_bundle()
 
 st.title("✈️ Visit with Us: Wellness Tourism Package Predictor")
 st.markdown("""
-This intelligent decision-support system predicts whether a prospective customer will purchase the 
+This intelligent decision-support system predicts whether a prospective customer will purchase the
 **Wellness Tourism Package** before sales outreach, optimizing sales agent productivity and maximizing campaign conversion.
 """)
 
@@ -37,7 +37,7 @@ st.sidebar.info("Scores at or above this threshold represent high-probability co
 with st.form("customer_profile_form"):
     st.subheader("📋 Customer Profile & Sales Interaction Attributes")
     col1, col2 = st.columns(2)
-    
+
     with col1:
         st.markdown("##### **Demographic & Travel Profile**")
         age = st.number_input("Customer Age", min_value=18, max_value=80, value=36, step=1)
@@ -49,7 +49,7 @@ with st.form("customer_profile_form"):
         city_tier = st.selectbox("City Tier", [1, 2, 3], index=0, help="Tier 1 > Tier 2 > Tier 3")
         own_car = st.selectbox("Owns a Car?", [0, 1], format_func=lambda x: "Yes" if x == 1 else "No")
         passport = st.selectbox("Holds Valid Passport?", [0, 1], index=1, format_func=lambda x: "Yes" if x == 1 else "No")
-        
+
     with col2:
         st.markdown("##### **Travel History & Pitch Details**")
         trips = st.number_input("Average Annual Trips", min_value=1.0, max_value=30.0, value=3.0, step=1.0)
@@ -85,13 +85,13 @@ if submitted:
         "Designation": designation,
         "MonthlyIncome": income,
     }])[bundle["feature_columns"]]
-    
+
     probability = float(bundle["model"].predict_proba(input_data)[0, 1])
     is_recommended = probability >= bundle["threshold"]
-    
+
     st.markdown("---")
     st.subheader("🎯 Prediction & Sales Recommendation")
-    
+
     res_col1, res_col2 = st.columns([1, 2])
     with res_col1:
         st.metric(
@@ -99,7 +99,7 @@ if submitted:
             value=f"{probability:.1%}",
             delta=f"{(probability - bundle['threshold']):.1%} vs threshold"
         )
-        
+
     with res_col2:
         if is_recommended:
             st.success(f"### ✅ HIGH PROPENSITY: PRIORITIZE OUTREACH\n"
@@ -109,6 +109,6 @@ if submitted:
             st.info(f"### ℹ️ LOW PROPENSITY: STANDARD NURTURING\n"
                     f"Customer score is below the operational cutoff of **{bundle['threshold']:.1%}**. "
                     f"Route to automated digital email drip campaigns to preserve direct sales capacity.")
-                    
+
     with st.expander("🔍 View Processed Input Dataframe"):
         st.dataframe(input_data, use_container_width=True)
