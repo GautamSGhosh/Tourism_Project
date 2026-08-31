@@ -18,7 +18,7 @@ def main() -> None:
         raise FileNotFoundError(f"Registered dataset not found at: {DATA_PATH}")
 
     df = pd.read_csv(DATA_PATH)
-    
+
     # 1. Check schema
     missing_cols = REQUIRED_COLUMNS - set(df.columns)
     if missing_cols:
@@ -38,7 +38,7 @@ def main() -> None:
         "Missing Cell Count": int(df.isna().sum().sum()),
         "Duplicate Rows": int(df.duplicated().sum()),
     }
-    
+
     print("=" * 60)
     print("           DATA REGISTRATION & SCHEMA AUDIT REPORT          ")
     print("=" * 60)
