@@ -19,7 +19,7 @@ from sklearn.metrics import (
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_val_predict
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
-from sklearn.ensemble import RandomForestClassifier
+from sklearn.ensemble import BaggingClassifier
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACT_DIR = ROOT / "artifacts"
@@ -45,29 +45,33 @@ def main() -> None:
     numeric_features = X_train.select_dtypes(include="number").columns.tolist()
     categorical_features = X_train.select_dtypes(exclude="number").columns.tolist()
 
+    # Mirrors the interactive preprocessor defined in Section 9.1 exactly
+    # (same step names and sparse_output setting) to avoid silent drift
+    # between the notebook's exploratory pipeline and this production script.
     preprocessor = ColumnTransformer(
         transformers=[
-            ("numeric", Pipeline([("imputer", SimpleImputer(strategy="median"))]), numeric_features),
-            ("categorical", Pipeline([
+            ("num", Pipeline([("imputer", SimpleImputer(strategy="median"))]), numeric_features),
+            ("cat", Pipeline([
                 ("imputer", SimpleImputer(strategy="most_frequent")),
-                ("onehot", OneHotEncoder(handle_unknown="ignore")),
+                ("onehot", OneHotEncoder(handle_unknown="ignore", sparse_output=False)),
             ]), categorical_features),
         ],
         remainder="drop",
     )
 
+    # NOTE: BaggingClassifier is used here because it was the top-ranked model
+    # in the Section 9.2-9.5 benchmarking matrix (highest Test PR-AUC and F1
+    # among all 7 candidates evaluated in the notebook). This keeps the
+    # production script consistent with the notebook's own model-selection
+    # evidence rather than defaulting to a different algorithm.
     pipeline = Pipeline([
         ("preprocessor", preprocessor),
-        ("model", RandomForestClassifier(
-            class_weight="balanced", random_state=RANDOM_STATE, n_jobs=-1
-        )),
+        ("model", BaggingClassifier(random_state=RANDOM_STATE, n_jobs=-1)),
     ])
 
     parameter_grid = {
-        "model__n_estimators": [150],
-        "model__max_depth": [None, 12],
-        "model__min_samples_leaf": [1, 3],
-        "model__max_features": ["sqrt"],
+        "model__n_estimators": [50, 100],
+        "model__max_samples": [0.8, 1.0],
     }
 
     cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)
@@ -79,7 +83,7 @@ def main() -> None:
     mlflow.set_tracking_uri((ROOT / "mlruns").resolve().as_uri())
     mlflow.set_experiment("tourism_package_prediction")
 
-    with mlflow.start_run(run_name="production_random_forest_pipeline"):
+    with mlflow.start_run(run_name="production_bagging_pipeline"):
         search.fit(X_train, y_train)
         best_model = search.best_estimator_
 
@@ -109,9 +113,9 @@ def main() -> None:
         mlflow.log_metrics(metrics)
 
         fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
-        RocCurveDisplay.from_predictions(y_test, probabilities, ax=axes[0], name="Random Forest")
+        RocCurveDisplay.from_predictions(y_test, probabilities, ax=axes[0], name="Bagging Classifier")
         axes[0].plot([0, 1], [0, 1], "--", color="grey")
-        PrecisionRecallDisplay.from_predictions(y_test, probabilities, ax=axes[1], name="Random Forest")
+        PrecisionRecallDisplay.from_predictions(y_test, probabilities, ax=axes[1], name="Bagging Classifier")
         axes[1].axhline(y_test.mean(), linestyle="--", color="grey")
         fig.tight_layout()
         figure_path = ARTIFACT_DIR / "model_evaluation.png"
@@ -134,14 +138,14 @@ def main() -> None:
             "model": best_model,
             "threshold": threshold,
             "feature_columns": X_train.columns.tolist(),
-            "model_type": "RandomForestClassifier",
+            "model_type": "BaggingClassifier",
         }
         model_path = DEPLOY_DIR / "best_model.joblib"
         joblib.dump(bundle, model_path)
 
         report = classification_report(y_test, predictions, output_dict=True, zero_division=0)
         model_card = {
-            "model_type": "RandomForestClassifier",
+            "model_type": "BaggingClassifier",
             "target": TARGET,
             "data_split": "80/20 stratified, random_state=42",
             "best_parameters": search.best_params_,
