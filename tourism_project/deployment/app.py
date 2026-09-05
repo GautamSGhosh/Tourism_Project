@@ -30,7 +30,7 @@ if bundle is None:
     st.stop()
 
 st.sidebar.header("ℹ️ Operating Configuration")
-st.sidebar.markdown(f"**Model Type:** `{bundle.get('model_type', 'RandomForestClassifier')}`")
+st.sidebar.markdown(f"**Model Type:** `{bundle.get('model_type', 'BaggingClassifier')}`")
 st.sidebar.markdown(f"**Optimal Decision Threshold:** `{bundle['threshold']:.2%}`")
 st.sidebar.info("Scores at or above this threshold represent high-probability conversions recommended for prioritized outreach.")
 
