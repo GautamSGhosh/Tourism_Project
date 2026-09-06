@@ -1,0 +1,111 @@
+name: Tourism Package MLOps Pipeline
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  register-dataset:
+    name: 1. Register & Validate Dataset
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r tourism_project/model_building/requirements.txt
+
+      - name: Execute dataset schema validation
+        run: python tourism_project/model_building/data_register.py
+
+      - name: Upload registered dataset artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: registered-data
+          path: tourism_project/data/tourism.csv
+          if-no-files-found: error
+          retention-days: 7
+
+  data-preparation:
+    name: 2. Clean & Split Dataset
+    needs: register-dataset
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r tourism_project/model_building/requirements.txt
+
+      - name: Download registered dataset artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: registered-data
+          path: tourism_project/data/
+
+      - name: Execute data preparation & stratified split
+        run: python tourism_project/model_building/prep.py
+
+      - name: Upload train/test split artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: tourism-data-splits
+          path: tourism_project/artifacts/
+          if-no-files-found: error
+          retention-days: 7
+
+  model-training:
+    name: 3. Model Training, MLflow Tracking & Auto-Commit
+    needs: data-preparation
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.11
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: "pip"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r tourism_project/model_building/requirements.txt
+
+      - name: Download train/test split artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: tourism-data-splits
+          path: tourism_project/artifacts/
+
+      - name: Train, tune, evaluate and serialize production model
+        run: python tourism_project/model_building/train.py
+
+      - name: Automatically commit and push refreshed model to main
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tourism_project/deployment/best_model.joblib tourism_project/deployment/model_card.json
+          git diff --staged --quiet || git commit -m "chore: automated model refresh by GitHub Actions CI/CD [skip ci]"
+          git push origin main
