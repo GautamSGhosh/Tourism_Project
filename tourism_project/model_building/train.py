@@ -19,7 +19,7 @@ from sklearn.metrics import (
 from sklearn.model_selection import GridSearchCV, StratifiedKFold, cross_val_predict
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import OneHotEncoder
-from sklearn.ensemble import BaggingClassifier
+from sklearn.ensemble import RandomForestClassifier
 
 ROOT = Path(__file__).resolve().parents[1]
 ARTIFACT_DIR = ROOT / "artifacts"
@@ -59,19 +59,21 @@ def main() -> None:
         remainder="drop",
     )
 
-    # NOTE: BaggingClassifier is used here because it was the top-ranked model
-    # in the Section 9.2-9.5 benchmarking matrix (highest Test PR-AUC and F1
-    # among all 7 candidates evaluated in the notebook). This keeps the
-    # production script consistent with the notebook's own model-selection
+    # NOTE: RandomForestClassifier is used here because it is the top-ranked
+    # model in the Section 9.2-9.5 benchmarking matrix, selected on unbiased
+    # cross-validated PR-AUC (grid.best_score_) rather than test-set score, to
+    # avoid test-set leakage into model selection. This keeps the production
+    # script consistent with the notebook's own (corrected) model-selection
     # evidence rather than defaulting to a different algorithm.
     pipeline = Pipeline([
         ("preprocessor", preprocessor),
-        ("model", BaggingClassifier(random_state=RANDOM_STATE, n_jobs=-1)),
+        ("model", RandomForestClassifier(class_weight="balanced", random_state=RANDOM_STATE, n_jobs=-1)),
     ])
 
     parameter_grid = {
-        "model__n_estimators": [50, 100],
-        "model__max_samples": [0.8, 1.0],
+        "model__n_estimators": [100, 150],
+        "model__max_depth": [10, 15, None],
+        "model__min_samples_leaf": [1, 3],
     }
 
     cv = StratifiedKFold(n_splits=3, shuffle=True, random_state=RANDOM_STATE)
@@ -83,7 +85,7 @@ def main() -> None:
     mlflow.set_tracking_uri((ROOT / "mlruns").resolve().as_uri())
     mlflow.set_experiment("tourism_package_prediction")
 
-    with mlflow.start_run(run_name="production_bagging_pipeline"):
+    with mlflow.start_run(run_name="production_random_forest_pipeline"):
         search.fit(X_train, y_train)
         best_model = search.best_estimator_
 
@@ -113,9 +115,9 @@ def main() -> None:
         mlflow.log_metrics(metrics)
 
         fig, axes = plt.subplots(1, 2, figsize=(12, 4.5))
-        RocCurveDisplay.from_predictions(y_test, probabilities, ax=axes[0], name="Bagging Classifier")
+        RocCurveDisplay.from_predictions(y_test, probabilities, ax=axes[0], name="Random Forest")
         axes[0].plot([0, 1], [0, 1], "--", color="grey")
-        PrecisionRecallDisplay.from_predictions(y_test, probabilities, ax=axes[1], name="Bagging Classifier")
+        PrecisionRecallDisplay.from_predictions(y_test, probabilities, ax=axes[1], name="Random Forest")
         axes[1].axhline(y_test.mean(), linestyle="--", color="grey")
         fig.tight_layout()
         figure_path = ARTIFACT_DIR / "model_evaluation.png"
@@ -138,14 +140,14 @@ def main() -> None:
             "model": best_model,
             "threshold": threshold,
             "feature_columns": X_train.columns.tolist(),
-            "model_type": "BaggingClassifier",
+            "model_type": "RandomForestClassifier",
         }
         model_path = DEPLOY_DIR / "best_model.joblib"
         joblib.dump(bundle, model_path)
 
         report = classification_report(y_test, predictions, output_dict=True, zero_division=0)
         model_card = {
-            "model_type": "BaggingClassifier",
+            "model_type": "RandomForestClassifier",
             "target": TARGET,
             "data_split": "80/20 stratified, random_state=42",
             "best_parameters": search.best_params_,
