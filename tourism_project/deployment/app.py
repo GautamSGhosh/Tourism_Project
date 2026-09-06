@@ -34,15 +34,16 @@ st.sidebar.markdown(f"**Model Type:** `{bundle.get('model_type', 'RandomForestCl
 st.sidebar.markdown(f"**Optimal Decision Threshold:** `{bundle['threshold']:.2%}`")
 st.sidebar.info("Scores at or above this threshold represent high-probability conversions recommended for prioritized outreach.")
 
-# ProductPitched and Designation have a deterministic one-to-one relationship
-# in the training dataset. Designation is therefore derived from ProductPitched
-# to prevent unsupported combinations during inference.
-PRODUCT_TO_DESIGNATION = {
-    "Basic": "Executive",
-    "Standard": "Senior Manager",
-    "Deluxe": "Manager",
-    "Super Deluxe": "AVP",
-    "King": "VP",
+# Designation and ProductPitched have a deterministic one-to-one relationship
+# in the training dataset. Designation is a pre-fixed customer attribute,
+# so ProductPitched is derived from the selected Designation to prevent
+# unsupported combinations during inference.
+DESIGNATION_TO_PRODUCT = {
+    "Executive": "Basic",
+    "Manager": "Deluxe",
+    "Senior Manager": "Standard",
+    "AVP": "Super Deluxe",
+    "VP": "King",
 }
 
 with st.form("customer_profile_form"):
@@ -55,32 +56,93 @@ with st.form("customer_profile_form"):
         gender = st.selectbox("Gender", ["Male", "Female"])
         marital = st.selectbox("Marital Status", ["Single", "Married", "Divorced", "Unmarried"])
         occupation = st.selectbox("Occupation", ["Salaried", "Small Business", "Large Business", "Free Lancer"])
-        income = st.number_input("Gross Monthly Income ($)", min_value=1000.0, max_value=150000.0, value=22500.0, step=500.0)
+        designation = st.selectbox(
+            "Designation",
+            ["Executive", "Manager", "Senior Manager", "AVP", "VP"]
+        )
+
+        # ProductPitched is automatically derived from the customer's
+        # pre-fixed Designation.
+        product = DESIGNATION_TO_PRODUCT[designation]
+        st.caption(f"Corresponding Product Pitched: **{product}**")
+
+        income = st.number_input(
+            "Gross Monthly Income ($)",
+            min_value=1000.0,
+            max_value=150000.0,
+            value=22500.0,
+            step=500.0
+        )
         city_tier = st.selectbox("City Tier", [1, 2, 3], index=0)
-        own_car = st.selectbox("Owns a Car?", [0, 1], format_func=lambda x: "Yes" if x == 1 else "No")
-        passport = st.selectbox("Holds Valid Passport?", [0, 1], index=1, format_func=lambda x: "Yes" if x == 1 else "No")
+        own_car = st.selectbox(
+            "Owns a Car?",
+            [0, 1],
+            format_func=lambda x: "Yes" if x == 1 else "No"
+        )
+        passport = st.selectbox(
+            "Holds Valid Passport?",
+            [0, 1],
+            index=1,
+            format_func=lambda x: "Yes" if x == 1 else "No"
+        )
 
     with col2:
         st.markdown("##### **Travel History & Pitch Details**")
-        trips = st.number_input("Average Annual Trips", min_value=1.0, max_value=30.0, value=3.0, step=1.0)
-        persons = st.number_input("Number of Persons Visiting", min_value=1, max_value=10, value=3, step=1)
-        children = st.number_input("Children Under Age 5", min_value=0.0, max_value=5.0, value=1.0, step=1.0)
-        property_star = st.selectbox("Preferred Hotel Rating", [3.0, 4.0, 5.0], index=0)
-        product = st.selectbox(
-            "Product Pitched",
-            ["Basic", "Standard", "Deluxe", "Super Deluxe", "King"]
+        trips = st.number_input(
+            "Average Annual Trips",
+            min_value=1.0,
+            max_value=30.0,
+            value=3.0,
+            step=1.0
+        )
+        persons = st.number_input(
+            "Number of Persons Visiting",
+            min_value=1,
+            max_value=10,
+            value=3,
+            step=1
+        )
+        children = st.number_input(
+            "Children Under Age 5",
+            min_value=0.0,
+            max_value=5.0,
+            value=1.0,
+            step=1.0
+        )
+        property_star = st.selectbox(
+            "Preferred Hotel Rating",
+            [3.0, 4.0, 5.0],
+            index=0
+        )
+        contact = st.selectbox(
+            "Type of Contact",
+            ["Self Enquiry", "Company Invited"]
+        )
+        duration = st.number_input(
+            "Pitch Duration (Minutes)",
+            min_value=5.0,
+            max_value=120.0,
+            value=16.0,
+            step=1.0
+        )
+        pitch_score = st.slider(
+            "Pitch Satisfaction Score (1-5)",
+            min_value=1,
+            max_value=5,
+            value=3
+        )
+        followups = st.number_input(
+            "Follow-up Calls Scheduled",
+            min_value=1.0,
+            max_value=10.0,
+            value=4.0,
+            step=1.0
         )
 
-        # Designation is automatically derived from ProductPitched
-        designation = PRODUCT_TO_DESIGNATION[product]
-        st.caption(f"Corresponding Designation: **{designation}**")
-
-        contact = st.selectbox("Type of Contact", ["Self Enquiry", "Company Invited"])
-        duration = st.number_input("Pitch Duration (Minutes)", min_value=5.0, max_value=120.0, value=16.0, step=1.0)
-        pitch_score = st.slider("Pitch Satisfaction Score (1-5)", min_value=1, max_value=5, value=3)
-        followups = st.number_input("Follow-up Calls Scheduled", min_value=1.0, max_value=10.0, value=4.0, step=1.0)
-
-    submitted = st.form_submit_button("🔮 Predict Purchase Propensity", use_container_width=True)
+    submitted = st.form_submit_button(
+        "🔮 Predict Purchase Propensity",
+        use_container_width=True
+    )
 
 if submitted:
     input_data = pd.DataFrame([{
@@ -120,13 +182,17 @@ if submitted:
 
     with res_col2:
         if is_recommended:
-            st.success(f"### ✅ HIGH PROPENSITY: PRIORITIZE OUTREACH\n"
-                       f"Customer score exceeds the optimized operating threshold of **{bundle['threshold']:.1%}**. "
-                       f"Assign immediately to a Senior Travel Consultant for personalized package presentation.")
+            st.success(
+                f"### ✅ HIGH PROPENSITY: PRIORITIZE OUTREACH\n"
+                f"Customer score exceeds the optimized operating threshold of **{bundle['threshold']:.1%}**. "
+                f"Assign immediately to a Senior Travel Consultant for personalized package presentation."
+            )
         else:
-            st.info(f"### ℹ️ LOW PROPENSITY: STANDARD NURTURING\n"
-                    f"Customer score is below the operational cutoff of **{bundle['threshold']:.1%}**. "
-                    f"Route to automated digital email drip campaigns to preserve direct sales capacity.")
+            st.info(
+                f"### ℹ️ LOW PROPENSITY: STANDARD NURTURING\n"
+                f"Customer score is below the operational cutoff of **{bundle['threshold']:.1%}**. "
+                f"Route to automated digital email drip campaigns to preserve direct sales capacity."
+            )
 
     with st.expander("🔍 View Processed Input Dataframe"):
         st.dataframe(input_data, use_container_width=True)
